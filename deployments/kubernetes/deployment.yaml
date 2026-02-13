@@ -1,1 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantumguard-flower-server
+  namespace: quantumguard  # Create this namespace first: kubectl create ns quantumguard
+  labels:
+    app: quantumguard
+    component: flower-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quantumguard
+      component: flower-server
+  template:
+    metadata:
+      labels:
+        app: quantumguard
+        component: flower-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: flower-server
+          image: quantumguard:dev  # Replace with your registry image: e.g., ghcr.io/declan-loder/quantumguard:latest
+          imagePullPolicy: IfNotPresent
+          command: ["poetry", "run", "flower-server", "--server-address=0.0.0.0:8080"]
+          ports:
+            - containerPort: 8080
+              name: grpc
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+              # nvidia.com/gpu: "1"  # Uncomment for GPU nodes
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+            - name: logs
+              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+          env:
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: QUANTUMGUARD_ENVIRONMENT
+              value: "production"
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: quantumguard-models-pvc
+        - name: logs
+          persistentVolumeClaim:
+            claimName: quantumguard-logs-pvc
+        - name: data
+          persistentVolumeClaim:
+            claimName: quantumguard-data-pvc
+        - name: config
+          configMap:
+            name: quantumguard-config
 
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantumguard-flower-server
+  namespace: quantumguard
+spec:
+  selector:
+    app: quantumguard
+    component: flower-server
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: grpc
+  type: ClusterIP  # Change to LoadBalancer/NodePort if external access needed
+
+---
+
+# Example PersistentVolumeClaims (create these separately or via Helm)
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: quantumguard-models-pvc
+#   namespace: quantumguard
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 10Gi
+
+# (Repeat for logs-pvc and data-pvc)
+
+---
+
+# Optional: Horizontal Pod Autoscaler (uncomment when ready)
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: quantumguard-server-hpa
+#   namespace: quantumguard
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: quantumguard-flower-server
+#   minReplicas: 1
+#   maxReplicas: 5
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 70
