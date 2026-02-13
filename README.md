@@ -11,7 +11,7 @@ Privacy-first, self-evolving multi-agent AI framework for real-time enterprise c
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/QuantumGuardAI.git
+git clone https://github.com/Declan-Loder/QuantumGuardAI.git
 cd QuantumGuardAI
 poetry install
 poetry run quantumguard --help
