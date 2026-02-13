@@ -1,1 +1,35 @@
+# QuantumGuard AI - Production Configuration Overrides
+# ====================================================
+# This file overrides ONLY the values that must differ from default.yaml in production.
+# Load order: default.yaml → production.yaml → env vars (QUANTUMGUARD_ prefix)
+# Use this sparingly — most settings stay in default.yaml.
 
+app:
+  environment: production
+  log_level: WARNING          # Reduce verbosity in prod (still structured JSON)
+
+agents:
+  threat_detector:
+    confidence_threshold: 0.92   # Stricter in production to reduce false positives
+
+  response_engine:
+    actions:
+      - alert_only               # Most conservative: no auto-isolation/block by default
+    escalation_delay_seconds: 600  # Longer delay before any automated action
+
+  optimizer:
+    enabled: false               # Never enable self-optimization automatically in prod
+
+privacy:
+  differential:
+    epsilon: 0.5                 # Tighter privacy budget in production
+
+logging:
+  format: json
+  handlers:
+    - file: /var/log/quantumguard/quantumguard.log  # Standard prod log path (adjust for your system)
+      rotation: 500MB
+      retention: 30 days
+
+cli:
+  output_format: json            # Machines/readability in prod ops
