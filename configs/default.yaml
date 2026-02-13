@@ -1,1 +1,107 @@
+# QuantumGuard AI - Default Configuration
+# ======================================
+# This file contains production-suitable defaults.
+# Values here are overridden by environment variables (prefixed QUANTUMGUARD_) or production.yaml.
+# Use snake_case keys for consistency with Python.
 
+# General
+app:
+  name: QuantumGuard AI
+  version: 0.1.0
+  log_level: INFO          # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  environment: development  # development | staging | production
+
+# Paths (relative to project root or absolute)
+paths:
+  models_dir: models/                # Where trained/saved models go
+  data_dir: data/                    # Input logs, pcaps, etc. (gitignored)
+  outputs_dir: outputs/              # Threat graphs, reports, alerts
+
+# Agents Configuration
+agents:
+  threat_detector:
+    enabled: true
+    model: gnn                     # Reference to models/gnn.py
+    interval_seconds: 60           # How often to scan/analyze
+    confidence_threshold: 0.85     # Alert only above this prob
+    max_graph_nodes: 5000          # Safety limit for GNN input size
+
+  response_engine:
+    enabled: true
+    actions:
+      - isolate_node
+      - block_ip
+      - alert_only           # Default conservative mode
+    escalation_delay_seconds: 300  # Time before escalating response
+
+  optimizer:
+    enabled: false                 # Off by default - enable for self-improvement loops
+    rl_algorithm: ppo              # Or sac, td3, etc. (future)
+    training_interval_hours: 24
+    simulation_episodes: 100
+
+# Models Hyperparameters
+models:
+  gnn:
+    type: graphsage               # Or gat, gin
+    hidden_channels: 128
+    num_layers: 3
+    dropout: 0.2
+    learning_rate: 0.001
+    epochs: 200
+    batch_size: 32
+    device: cuda                   # cuda | cpu | mps (auto-detected if possible)
+
+  federated:
+    strategy: fedavg
+    num_rounds: 10
+    clients_per_round: 5
+    local_epochs: 5
+    min_fit_clients: 3
+
+# Privacy Settings
+privacy:
+  differential:
+    enabled: true
+    epsilon: 1.0                 # DP budget - lower = more private
+    delta: 1e-5
+    noise_multiplier: 1.1
+    max_grad_norm: 1.0
+
+  encryption:
+    post_quantum: true
+    algorithm: kyber512            # Or dilithium2, etc. (via liboqs)
+    fallback: x25519               # Classical hybrid if needed
+
+# Tools Configuration
+tools:
+  network_scan:
+    enabled: true
+    timeout_seconds: 30
+    privileged: false              # Requires root for raw sockets
+
+  log_analyzer:
+    parsers:
+      - suricata
+      - zeek
+      - windows_event
+
+  alert_dispatch:
+    channels:
+      - console                    # Always enabled
+      - slack: false
+      - pagerduty: false
+      - email: false
+
+# Logging (structured JSON for production)
+logging:
+  format: json                     # Or console for dev
+  handlers:
+    - file: logs/quantumguard.log
+      rotation: 100MB
+      retention: 7 days
+
+# CLI Defaults
+cli:
+  default_config: default.yaml
+  output_format: json              # Or yaml, table for human
