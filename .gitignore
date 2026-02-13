@@ -1,0 +1,7 @@
+# Add these
+.env
+*.pyc
+__pycache__/
+.venv/
+data/
+*.log
