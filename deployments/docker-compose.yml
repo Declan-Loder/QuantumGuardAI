@@ -1,1 +1,104 @@
+version: '3.9'
 
+services:
+
+  flower-server:
+    build:
+      context: ../
+      dockerfile: deployments/Dockerfile
+    image: quantumguard:dev
+    container_name: quantumguard-flower-server
+    command: ["flower-server", "--server-address=0.0.0.0:8080"]
+    ports:
+      - "8080:8080"  # Flower gRPC server
+    volumes:
+      - ../models:/app/models
+      - ../logs:/app/logs
+      - ../data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]  # Flower exposes /healthz or similar; adjust if needed
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - quantumguard-net
+
+  client-1:
+    build:
+      context: ../
+      dockerfile: deployments/Dockerfile
+    image: quantumguard:dev
+    container_name: quantumguard-client-1
+    command: ["python", "-m", "quantumguard.models.federated", "--client", "--server-address=flower-server:8080"]
+    depends_on:
+      flower-server:
+        condition: service_healthy
+    volumes:
+      - ../models:/app/models:ro  # Read-only models for clients in real federated setup
+      - ../data:/app/data
+      - ../logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG  # More verbose for dev troubleshooting
+      - QUANTUMGUARD_ENVIRONMENT=development
+    restart: unless-stopped
+    networks:
+      - quantumguard-net
+
+  client-2:
+    build:
+      context: ../
+      dockerfile: deployments/Dockerfile
+    image: quantumguard:dev
+    container_name: quantumguard-client-2
+    command: ["python", "-m", "quantumguard.models.federated", "--client", "--server-address=flower-server:8080"]
+    depends_on:
+      - flower-server
+    volumes:
+      - ../models:/app/models:ro
+      - ../data:/app/data
+      - ../logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - QUANTUMGUARD_ENVIRONMENT=development
+    restart: unless-stopped
+    networks:
+      - quantumguard-net
+
+  # Example: Add more clients by duplicating and renaming (client-3, etc.)
+
+  # Optional: Jupyter notebook for interactive model dev/exploration
+  # jupyter:
+  #   build:
+  #     context: ../
+  #     dockerfile: deployments/Dockerfile
+  #   image: quantumguard:dev
+  #   container_name: quantumguard-jupyter
+  #   command: ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser"]
+  #   ports:
+  #     - "8888:8888"
+  #   volumes:
+  #     - ../:/app
+  #   environment:
+  #     - JUPYTER_ENABLE_LAB=yes
+  #   restart: unless-stopped
+  #   networks:
+  #     - quantumguard-net
+
+# Uncomment for GPU support (requires NVIDIA Container Toolkit)
+#   deploy:
+#     resources:
+#       reservations:
+#         devices:
+#           - driver: nvidia
+#             count: 1
+#             capabilities: [gpu]
+
+networks:
+  quantumguard-net:
+    driver: bridge
