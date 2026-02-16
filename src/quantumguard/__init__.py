@@ -34,7 +34,7 @@ from __future__ import annotations
 
 # Core utilities (always available)
 from .utils.config import config, get_config
-from .utils.logging import get_logger, setup_logging
+#from .utils.logging import get_logger, setup_logging
 from .utils.viz import get_viz, plot_threat_graph, save_threat_viz, show_threat_viz
 
 # Agents (main public classes)
@@ -105,6 +105,6 @@ __all__ = [
 # Optional: auto-setup on import (logging, etc.)
 import sys
 
-if "pytest" not in sys.modules:  # Don't run setup in tests
+#if "pytest" not in sys.modules:  # Don't run setup in tests
     from .utils.logging import setup_logging
     setup_logging()
