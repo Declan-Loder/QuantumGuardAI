@@ -1,4 +1,4 @@
-cat << 'EOF' > pyproject.toml 
+cat < 'EOF' > pyproject.toml 
 [tool.poetry]
 name = "quantumguard"
 version = "0.1.0-dev" description = "Privacy-preserving, self-optimizing AI agent framework
