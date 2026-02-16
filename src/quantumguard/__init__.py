@@ -106,5 +106,5 @@ __all__ = [
 import sys
 
 #if "pytest" not in sys.modules:  # Don't run setup in tests
-    from .utils.logging import setup_logging
-    setup_logging()
+  #  from .utils.logging import setup_logging
+   # setup_logging()
