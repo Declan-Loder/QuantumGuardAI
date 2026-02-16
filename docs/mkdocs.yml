@@ -1,1 +1,156 @@
+site_name: QuantumGuard AI
+site_description: Privacy-preserving, self-optimizing multi-agent AI framework for enterprise cybersecurity — GNN threat detection, federated learning, quantum-resistant crypto.
+site_author: Declan Loder
+site_url: https://declan-loder.github.io/QuantumGuardAI/
+repo_url: https://github.com/Declan-Loder/QuantumGuardAI
+repo_name: Declan-Loder/QuantumGuardAI
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Declan Loder
 
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Declan-Loder/QuantumGuardAI
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/yourhandle  # Update when you have one
+    - icon: fontawesome/solid/globe
+      link: https://yourwebsite.com     # Optional future personal/site link
+
+extra_css:
+  - styles/extra.css  # Create this file later for custom tweaks if needed
+
+theme:
+  name: material
+  language: en
+  favicon: assets/favicon.ico          # Add a real favicon later (place in docs/assets/)
+  logo: assets/logo.png                # Add your logo (e.g., shield + quantum symbol)
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/link
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+    - search.share
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_root_toc_entry: false
+            show_signature_annotations: true
+            show_bases: true
+            show_source: true
+            members_order: source
+            docstring_style: google
+            heading_level: 3
+            merge_init_into_class: true
+            separate_signature: true
+            line_length: 88
+            inherited_members: true
+            filters: ["!^_"]
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+      exclude:
+        - index.md  # Optional: don't show date on landing if you prefer
+
+nav:
+  - Home: index.md
+  - Why QuantumGuard: why.md                  # Add later — competitive analysis, motivation
+  - Architecture: architecture.md
+  - Getting Started:
+      - Installation: installation.md
+      - Quickstart: quickstart.md
+  - Core Components:
+      - Agents: agents.md
+      - Models: models.md
+      - Tools: tools.md
+      - Privacy & Crypto: privacy.md
+      - Utilities: utils.md
+  - CLI Reference: cli.md
+  - Configuration: configuration.md
+  - Deployment:
+      - Docker & Compose: deployment-docker.md
+      - Kubernetes: deployment-k8s.md
+  - API Reference:
+      - Agents: reference/agents.md
+      - Models: reference/models.md
+      - Tools: reference/tools.md
+      - Privacy: reference/privacy.md
+      - Utils: reference/utils.md
+  - Contributing: contributing.md
+  - License: license.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: Declan-Loder
+      repo: QuantumGuardAI
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+watch:
+  - src/quantumguard  # Auto-rebuild on code changes for mkdocstrings
