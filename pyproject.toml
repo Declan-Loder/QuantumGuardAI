@@ -1,12 +1,12 @@
-cat < 'EOF' > pyproject.toml 
+cat << 'EOF' > pyproject.toml
 [tool.poetry]
 name = "quantumguard"
-version = "0.1.0-dev" description = "Privacy-preserving, self-optimizing AI agent framework
-for enterprise cybersecurity" 
+version = "0.1.0-dev"
+description = "Privacy-preserving, self-optimizing AI agent framework for enterprise cybersecurity"
 authors = ["Declan Loder <declan@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "quantumguard", from = "src"}]
+packages = [{ include = "quantumguard", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -20,7 +20,7 @@ plotly = "^5.18"
 [tool.poetry.scripts]
 quantumguard = "quantumguard.cli:app"
 
-[build-system] 
+[build-system]
 requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api" 
+build-backend = "poetry.core.masonry.api"
 EOF
