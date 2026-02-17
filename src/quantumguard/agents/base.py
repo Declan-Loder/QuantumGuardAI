@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 import structlog
 
-from quantumguard.utils.config import Config  # We'll create this later
+from quantumguard.utils.config import config  # We'll create this later
 from quantumguard.utils.logging import get_logger
 
 logger = get_logger(__name__)

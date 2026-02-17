@@ -1,0 +1,218 @@
+"""
+Configuration Loader
+====================
+
+Central, type-safe configuration system for QuantumGuard AI.
+
+Loading order (last wins):
+1. configs/default.yaml
+2. configs/production.yaml (if environment == "production")
+3. Environment variables prefixed with QUANTUMGUARD_ (e.g. QUANTUMGUARD_APP_LOG_LEVEL=DEBUG)
+4. Runtime overrides (optional dict)
+
+Features:
+- Pydantic models for validation & type hints
+- Dot-notation access (config.app.name)
+- Secret masking in logs
+- Lazy loading with caching
+
+Usage:
+    from quantumguard.utils.config import get_config
+
+    config = get_config()
+    print(config.app.log_level)          # "INFO"
+    print(config.agents.threat_detector.confidence_threshold)  # 0.85
+"""
+
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+from pydantic import BaseModel, Field, SecretStr, ValidationError
+
+
+logger = get_logger(__name__)
+
+# ────────────────────────────────────────────────
+# Pydantic Models for validation & type safety
+# ────────────────────────────────────────────────
+
+class AppConfig(BaseModel):
+    name: str = "QuantumGuard AI"
+    version: str = "0.1.0"
+    log_level: str = Field("INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+    environment: str = Field("development", pattern="^(development|staging|production)$")
+
+
+class PathsConfig(BaseModel):
+    models_dir: str = "models/"
+    data_dir: str = "data/"
+    outputs_dir: str = "outputs/"
+
+
+class AgentThreatDetectorConfig(BaseModel):
+    enabled: bool = True
+    confidence_threshold: float = Field(0.85, ge=0.0, le=1.0)
+    max_graph_nodes: int = Field(5000, gt=0)
+
+
+class AgentResponseEngineConfig(BaseModel):
+    enabled: bool = True
+    actions: list[str] = Field(default_factory=lambda: ["alert_only"])
+    escalation_delay_seconds: int = Field(300, ge=0)
+    dry_run: bool = True
+
+
+class AgentOptimizerConfig(BaseModel):
+    enabled: bool = False
+    rl_algorithm: str = "evolution"
+    simulation_episodes: int = 50
+    training_interval_hours: float = 24.0
+
+
+class AgentsConfig(BaseModel):
+    threat_detector: AgentThreatDetectorConfig = AgentThreatDetectorConfig()
+    response_engine: AgentResponseEngineConfig = AgentResponseEngineConfig()
+    optimizer: AgentOptimizerConfig = AgentOptimizerConfig()
+
+
+class ModelsGNNConfig(BaseModel):
+    type: str = "graphsage"
+    hidden_channels: int = 128
+    num_layers: int = 3
+    dropout: float = 0.2
+
+
+class ModelsFederatedConfig(BaseModel):
+    strategy: str = "fedavg"
+    num_rounds: int = 10
+    clients_per_round: float = 0.3
+
+
+class ModelsConfig(BaseModel):
+    gnn: ModelsGNNConfig = ModelsGNNConfig()
+    federated: ModelsFederatedConfig = ModelsFederatedConfig()
+
+
+class PrivacyDifferentialConfig(BaseModel):
+    enabled: bool = True
+    epsilon: float = Field(1.0, ge=0.1)
+    delta: float = Field(1e-5, gt=0)
+    noise_multiplier: float = 1.1
+    max_grad_norm: float = 1.0
+
+
+class PrivacyEncryptionConfig(BaseModel):
+    post_quantum: bool = True
+    kem_algorithm: str = "ML-KEM-768"
+    sig_algorithm: str = "ML-DSA-65"
+    hybrid: bool = True
+
+
+class PrivacyConfig(BaseModel):
+    differential: PrivacyDifferentialConfig = PrivacyDifferentialConfig()
+    encryption: PrivacyEncryptionConfig = PrivacyEncryptionConfig()
+
+
+class ToolsAlertDispatchConfig(BaseModel):
+    channels: list[str] = Field(default_factory=lambda: ["console"])
+    dry_run: bool = True
+
+
+class ToolsNetworkScanConfig(BaseModel):
+    enabled: bool = True
+    privileged: bool = False
+    timeout_seconds: float = 2.0
+    dry_run: bool = True
+
+
+class ToolsConfig(BaseModel):
+    alert_dispatch: ToolsAlertDispatchConfig = ToolsAlertDispatchConfig()
+    network_scan: ToolsNetworkScanConfig = ToolsNetworkScanConfig()
+
+
+class RootConfig(BaseModel):
+    app: AppConfig = AppConfig()
+    paths: PathsConfig = PathsConfig()
+    agents: AgentsConfig = AgentsConfig()
+    models: ModelsConfig = ModelsConfig()
+    privacy: PrivacyConfig = PrivacyConfig()
+    tools: ToolsConfig = ToolsConfig()
+
+
+# ────────────────────────────────────────────────
+# Loader Implementation
+# ────────────────────────────────────────────────
+
+@lru_cache()
+def get_config(env: str = os.getenv("QUANTUMGUARD_ENVIRONMENT", "development")) -> RootConfig:
+    """
+    Load, merge, validate, and return the full configuration.
+
+    Caches result so it's only loaded once per process.
+    """
+    base_dir = Path(__file__).parent.parent.parent / "configs"
+
+    default_path = base_dir / "default.yaml"
+    production_path = base_dir / "production.yaml"
+
+    raw_config: Dict[str, Any] = {}
+
+    # 1. Load default.yaml
+    if default_path.is_file():
+        with default_path.open("r", encoding="utf-8") as f:
+            raw_config = yaml.safe_load(f) or {}
+    else:
+
+    # 2. Overlay production.yaml if in production
+    if env == "production" and production_path.is_file():
+        with production_path.open("r", encoding="utf-8") as f:
+            prod_overrides = yaml.safe_load(f) or {}
+            _deep_update(raw_config, prod_overrides)
+
+    # 3. Apply environment variable overrides (QUANTUMGUARD_APP_LOG_LEVEL=DEBUG)
+    for key, value in os.environ.items():
+        if key.startswith("QUANTUMGUARD_"):
+            parts = key[len("QUANTUMGUARD_"):].lower().split("_")
+            current = raw_config
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = value
+
+    # 4. Validate with Pydantic
+    try:
+        validated = RootConfig(**raw_config)
+            "Configuration loaded and validated successfully",
+            environment=env,
+            log_level=validated.app.log_level
+        )
+        return validated
+    except ValidationError as e:
+        raise
+
+
+def _deep_update(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+    """Recursively update target dict with source (nested merge)."""
+    for key, value in source.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            _deep_update(target[key], value)
+        else:
+            target[key] = value
+
+
+# Convenience global access (use with caution – prefer dependency injection)
+_config_instance: Optional[RootConfig] = None
+
+
+def config() -> RootConfig:
+    """Global singleton accessor (lazy-loaded)."""
+    global _config_instance
+    if _config_instance is None:
+        _config_instance = get_config()
+    return _config_instance

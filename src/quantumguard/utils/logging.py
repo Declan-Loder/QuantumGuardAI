@@ -37,8 +37,8 @@ from quantumguard.utils.config import config
 def redact_sensitive_fields(
     logger: Any,
     method_name: str,
-    event_dict: Dict[str, Any]
-) -> Dict[str, Any]:
+    event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """
     Redact sensitive fields (e.g. IP addresses, tokens, keys) in logs.
     """
@@ -60,8 +60,8 @@ def redact_sensitive_fields(
 def add_log_level(
     logger: Any,
     method_name: str,
-    event_dict: Dict[str, Any]
-) -> Dict[str, Any]:
+    event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """Add numeric log level for easier filtering in log systems."""
     level_to_number = {
         "debug": 10,
