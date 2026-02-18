@@ -25,24 +25,6 @@ Built with a clean, modular architecture — ready for real-world deployment.
 - **Learning**: Basic optimizer analyzes past detections and adjusts thresholds (config loading in progress)
 - **Threat intel**: Fetching free public IOCs (Phase 1 in progress)
 
-### Quick Start
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/Declan-Loder/QuantumGuardAI.git
-cd QuantumGuardAI
-
-# 2. Install dependencies (Poetry recommended)
-poetry install
-
-# 3. Run a detection (CLI)
-poetry run quantumguard detect data/dummy_logs.json
-
-# 4. Launch the dashboard
-poetry run streamlit run dashboard.py
-
-Open http://localhost:8501 in your browser → click Run Detect → watch it analyze, score threats, simulate blocking, and generate a PDF report.
-
 ### Project Structure
 
 QuantumGuardAI/
@@ -59,7 +41,9 @@ QuantumGuardAI/
 ├── pyproject.toml            # Poetry dependencies
 └── README.md
 
-Roadmap (2026)
+Open http://localhost:8501 in your browser → click Run Detect → watch it analyze, score threats, simulate blocking, and generate a PDF report.
+
+### Roadmap (2026)
 
 Phase 1 (now): Real internet threat intel integration (public feeds)
 Phase 2: Continual learning + federated updates (privacy-preserving)
@@ -67,7 +51,8 @@ Phase 3: Real-time prevention (ufw/firewall integration)
 Phase 4: Post-quantum encryption + full self-improvement loop
 Phase 5: Commercial licensing, API, enterprise dashboard
 
-Contributing
+### Contributing
+
 Pull requests welcome!
 Especially:
 
@@ -76,8 +61,23 @@ Training scripts for GNN
 Dashboard improvements
 Real firewall integrations
 
-License
+### License
 MIT License (open core) — commercial / enterprise licensing available for production use.
 Made with 🐙 by Declan Loder
 Johannesburg, South Africa
 2026
+
+### Quick Start
+```bash
+# 1. Clone the repo
+git clone https://github.com/Declan-Loder/QuantumGuardAI.git
+cd QuantumGuardAI
+
+# 2. Install dependencies (Poetry recommended)
+poetry install
+
+# 3. Run a detection (CLI)
+poetry run quantumguard detect data/dummy_logs.json
+
+# 4. Launch the dashboard
+poetry run streamlit run dashboard.py
