@@ -2,52 +2,33 @@
 Optimizer Agent (Self-Improvement Meta-Agent)
 =============================================
 
-This agent is responsible for continuously improving the performance of other agents
-through simulated episodes, reinforcement learning, or evolutionary strategies.
+This agent continuously improves the system by analyzing past real detections
+and adjusting key thresholds (e.g. confidence_threshold) to reduce false positives
+or catch more threats.
 
-Key responsibilities:
-- Run controlled simulations of network attacks and defenses
-- Evaluate how well current ThreatDetector + ResponseEngine configurations perform
-- Propose / apply improvements (hyperparameter tuning, policy adjustments)
-- Maintain safety: only apply changes with human approval or in sandbox mode
-- Store improvement trajectories for analysis
-
-Configuration keys used:
-- enabled (bool) – must be explicitly set to true
-- rl_algorithm (str) – 'ppo', 'evolution', 'grid_search' (MVP: simple evolution)
-- simulation_episodes (int)
-- training_interval_hours (float)
-
-For MVP: uses a simple evolutionary strategy (perturb parameters → evaluate → keep better)
+For MVP: rule-based adaptation based on real detection history.
+Future: full RL / evolutionary strategies with real simulations.
 """
 
 from __future__ import annotations
 
-import copy
-import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from quantumguard.agents.base import BaseAgent
 from quantumguard.utils.logging import get_logger
+from quantumguard.utils.storage import load_history  # Your history storage
 
 logger = get_logger(__name__)
 
 class Optimizer(BaseAgent):
     """
-    Meta-agent for self-optimization of the QuantumGuard system.
-
-    It runs offline/scheduled simulations to test variations of detection/response
-    policies and gradually improves overall system performance.
-
-    Safety note: This agent should NEVER run in production without strict controls,
-    human oversight, or sandbox isolation.
+    Self-improvement agent that learns from real past detections to tune parameters.
     """
 
     description: str = (
-        "Self-improvement agent that runs simulations to refine detection thresholds, "
-        "response policies, and model hyperparameters. Uses evolutionary or RL methods "
-        "to evolve better configurations over time."
+        "Analyzes historical real detections to automatically adjust detection thresholds "
+        "and policies for better performance over time."
     )
 
     def __init__(
@@ -60,167 +41,81 @@ class Optimizer(BaseAgent):
 
         self.enabled: bool = self.config.get("enabled", False)
         if not self.enabled:
-            logger.warning(
-                "Optimizer disabled by configuration. "
-                "Set agents.optimizer.enabled: true to activate."
-            )
+            logger.warning("Optimizer disabled in config (agents.optimizer.enabled: false)")
 
-        self.algorithm: str = self.config.get("rl_algorithm", "evolution")
-        self.episodes_per_cycle: int = self.config.get("simulation_episodes", 50)
-        self.interval_hours: float = self.config.get("training_interval_hours", 24.0)
+        self.min_history: int = self.config.get("min_history", 3)
+        self.target_ratio: float = self.config.get("target_high_conf_ratio", 0.60)  # Aim for ~60% high-confidence
 
-        self.best_config: Dict[str, Any] = {}          # Current champion config
-        self.best_score: float = -float("inf")         # Higher = better
-        self.improvement_history: List[Dict[str, Any]] = []
-
-        self._initialize_baseline()
-
-    def _initialize_baseline(self) -> None:
-        """Capture the initial/default configuration as baseline."""
-        # For MVP: hard-coded example metrics to optimize
-        # In real: would pull from config of ThreatDetector / ResponseEngine
-        baseline = {
-            "detection_threshold": 0.85,
-            "response_delay_sec": 300,
-            "false_positive_penalty": 10.0,
-            "missed_threat_penalty": 50.0,
-        }
-        self.best_config = baseline.copy()
-        self.remember("baseline_config", baseline)
-        logger.info("Baseline configuration captured", **baseline)
-
-    def _define_tools(self) -> Dict[str, Any]:
-        """Optimizer-specific tools."""
-        return {
-            "run_simulation_episode": self._run_simulation_episode,
-            "evaluate_policy": self._evaluate_policy,
-            "propose_config_perturbation": self._propose_config_perturbation,
-        }
-
-    def _run_simulation_episode(self, config_variant: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Tool: Simulate one episode of attack-defense in a mock environment.
-
-        Returns dict with performance metrics:
-        - true_positives
-        - false_positives
-        - false_negatives
-        - reward (negative penalties)
-        """
-        # MVP: very simplified mock simulation
-        # Real version would use a network simulator (e.g. mininet-like) or replay datasets
-
-        # Mock attack patterns (randomized)
-        attack_success_prob = random.uniform(0.1, 0.6)
-        detection_rate = 1.0 - (config_variant["detection_threshold"] * 0.8)  # Higher threshold → fewer detections
-
-        tp = int(100 * detection_rate * (1 - attack_success_prob))
-        fp = int(50 * config_variant["detection_threshold"])  # More aggressive → more FPs
-        fn = 100 - tp
-
-        reward = (
-            tp * 20.0
-            - fp * config_variant["false_positive_penalty"]
-            - fn * config_variant["missed_threat_penalty"]
-        )
-
-        episode_result = {
-            "true_positives": tp,
-            "false_positives": fp,
-            "false_negatives": fn,
-            "reward": reward,
-            "config": config_variant,
-        }
-
-        self.logger.debug("Simulation episode completed", **episode_result)
-        return episode_result
-
-    def _evaluate_policy(self, config_variant: Dict[str, Any]) -> float:
-        """Run multiple episodes and average reward."""
-        rewards = []
-        for _ in range(self.episodes_per_cycle // 10):  # Sub-sample for speed in MVP
-            result = self.call_tool("run_simulation_episode", config_variant=config_variant)
-            rewards.append(result["reward"])
-
-        avg_reward = sum(rewards) / len(rewards) if rewards else 0.0
-        return avg_reward
-
-    def _propose_config_perturbation(self) -> Dict[str, Any]:
-        """Generate a small random change to current best config (evolution step)."""
-        variant = copy.deepcopy(self.best_config)
-
-        # Small Gaussian noise on numeric params
-        for key in variant:
-            if isinstance(variant[key], (int, float)):
-                variant[key] += random.gauss(0, 0.05 * abs(variant[key]) + 0.01)
-
-        # Clip to reasonable ranges
-        variant["detection_threshold"] = max(0.5, min(0.98, variant["detection_threshold"]))
-        variant["response_delay_sec"] = max(60, min(1800, variant["response_delay_sec"]))
-
-        return variant
+        # Current tunable parameters (will be adjusted)
+        self.confidence_threshold: float = self.config.get("confidence_threshold", 0.85)
 
     def execute(self, input_data: Any = None) -> Dict[str, Any]:
         """
-        Main optimization cycle (called periodically or manually).
-
-        1. Propose new config variant
-        2. Evaluate it via simulations
-        3. If better than current best → update champion
-        4. Store trajectory
-
-        Returns:
-            Dict with improvement results, new best score, etc.
+        Run one optimization cycle: analyze history → adjust threshold.
         """
         if not self.enabled:
             return {"status": "disabled", "message": "Optimizer not enabled in config"}
 
-        start_time = time.time()
+        history = load_history()
+        if not history or len(history) < self.min_history:
+            return {
+                "status": "insufficient_data",
+                "message": f"Need at least {self.min_history} detections to learn. Have: {len(history)}",
+                "history_count": len(history),
+            }
 
-        # Propose & evaluate a new candidate
-        candidate_config = self.call_tool("propose_config_perturbation")
-        candidate_score = self.call_tool("evaluate_policy", config_variant=candidate_config)
+        # Analyze real past performance
+        high_conf_count = sum(1 for d in history if d.get("high_confidence", False))
+        total = len(history)
+        high_conf_ratio = high_conf_count / total if total > 0 else 0.0
 
         improved = False
-        if candidate_score > self.best_score:
-            self.best_config = candidate_config
-            self.best_score = candidate_score
-            self.update_state("best_config", candidate_config)
-            self.update_state("best_score", candidate_score)
+        old_threshold = self.confidence_threshold
+        message = ""
+
+        # Simple, safe rule-based learning
+        if high_conf_ratio > self.target_ratio + 0.20:  # Too many alerts → raise threshold
+            self.confidence_threshold = min(0.98, self.confidence_threshold + 0.03)
             improved = True
+            message = f"Too many high-confidence detections ({high_conf_ratio:.1%}). Raised threshold to {self.confidence_threshold:.3f}"
+        elif high_conf_ratio < self.target_ratio - 0.20:  # Too few alerts → lower threshold
+            self.confidence_threshold = max(0.60, self.confidence_threshold - 0.03)
+            improved = True
+            message = f"Too few high-confidence detections ({high_conf_ratio:.1%}). Lowered threshold to {self.confidence_threshold:.3f}"
+        else:
+            message = f"Threshold stable at {self.confidence_threshold:.3f} (ratio {high_conf_ratio:.1%} near target)"
+
+        # Log result
+        if improved:
             logger.info(
-                "New best configuration found",
-                new_score=candidate_score,
-                improvement=(candidate_score - self.best_score),
-                **candidate_config
+                "Optimizer updated threshold",
+                old=old_threshold,
+                new=self.confidence_threshold,
+                ratio=high_conf_ratio,
+                history_count=total
             )
+        else:
+            logger.debug("No change needed", ratio=high_conf_ratio, threshold=self.confidence_threshold)
 
-        # Record history
-        history_entry = {
-            "timestamp": time.time(),
-            "score": candidate_score,
-            "improved": improved,
-            "config": candidate_config,
-        }
-        self.improvement_history.append(history_entry)
-        self.remember("improvement_history", self.improvement_history[-50:])  # Keep last 50
+        # Optional: run one mock simulation episode (for future expansion)
+        # mock_result = self._run_mock_episode()
 
-        duration = time.time() - start_time
         return {
             "status": "success",
             "improved": improved,
-            "current_best_score": self.best_score,
-            "candidate_score": candidate_score,
-            "cycle_duration_sec": duration,
-            "episodes_evaluated": self.episodes_per_cycle // 10,
+            "old_threshold": old_threshold,
+            "new_threshold": self.confidence_threshold,
+            "high_confidence_ratio": round(high_conf_ratio, 3),
+            "history_count": total,
+            "message": message,
         }
 
+    def _run_mock_episode(self) -> Dict:
+        """Placeholder for future simulation-based evaluation."""
+        # Can be expanded later with real mock attacks
+        return {"reward": random.uniform(-10, 20), "note": "mock episode"}
+
     def finalize(self) -> None:
-        """Save best config / history on shutdown."""
         super().finalize()
-        logger.info(
-            "Optimizer finalizing",
-            best_score=self.best_score,
-            history_length=len(self.improvement_history)
-        )
-        # Future: persist best_config to disk / model registry
+        logger.info("Optimizer finalizing", current_threshold=self.confidence_threshold)
+        # Future: save updated threshold to persistent config file

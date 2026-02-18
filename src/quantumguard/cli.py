@@ -132,6 +132,10 @@ def detect(
 
     result = detector.execute(graph)
 
+    # Save to history for learning
+from quantumguard.utils.storage import save_detection  # or inline the function
+    save_detection(result)
+    
     console = Console()
     table = Table(title="Detection Summary")
     table.add_column("Metric", style="cyan")
@@ -208,9 +212,6 @@ def respond(
 def optimize(
     cycles: int = typer.Option(1, "--cycles", "-n", help="Number of optimization cycles"),
 ) -> None:
-    """
-    Run self-optimization / policy refinement cycles.
-    """
     logger.info(f"Starting optimizer – {cycles} cycles")
 
     cfg = config().agents.optimizer
@@ -218,15 +219,15 @@ def optimize(
         logger.warning("Optimizer disabled in config")
         raise typer.Exit(0)
 
-    optimizer = Optimizer("cli-optimizer", config=cfg.dict())
+    optimizer = Optimizer(cfg.dict())
 
     for i in range(cycles):
         result = optimizer.execute()
         console = Console()
         console.print(f"[bold]Cycle {i+1}/{cycles}[/bold]")
         console.print(f"Improved: {result['improved']}")
-        console.print(f"Best score: {result['current_best_score']:.2f}")
-
+        console.print(f"Message: {result['message']}")
+        console.print(f"New threshold: {result['new_threshold']:.3f}")
 
 # ────────────────────────────────────────────────
 # Viz Command
