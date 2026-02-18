@@ -25,24 +25,6 @@ Built with a clean, modular architecture — ready for real-world deployment.
 - **Learning**: Basic optimizer analyzes past detections and adjusts thresholds (config loading in progress)
 - **Threat intel**: Fetching free public IOCs (Phase 1 in progress)
 
-### Project Structure
-
-QuantumGuardAI/
-├── src/quantumguard/
-│   ├── agents/               # ThreatDetector, ResponseEngine, Optimizer
-│   ├── models/               # GNN (GraphSAGE) model
-│   ├── utils/                # config, logging, viz, storage
-│   ├── intel/                # Threat intel fetchers (OTX, AbuseIPDB, free feeds)
-│   └── cli.py                # Main CLI entrypoint
-├── dashboard.py              # Streamlit web UI
-├── config/                   # YAML configuration files
-├── data/                     # Sample logs (gitignored)
-├── outputs/                  # Graphs, reports, threat intel cache
-├── pyproject.toml            # Poetry dependencies
-└── README.md
-
-Open http://localhost:8501 in your browser → click Run Detect → watch it analyze, score threats, simulate blocking, and generate a PDF report.
-
 ### Roadmap (2026)
 
 Phase 1 (now): Real internet threat intel integration (public feeds)
@@ -81,3 +63,5 @@ poetry run quantumguard detect data/dummy_logs.json
 
 # 4. Launch the dashboard
 poetry run streamlit run dashboard.py
+
+Open http://localhost:8501 in your browser → click Run Detect → watch it analyze, score threats, simulate blocking, and generate a PDF report.
