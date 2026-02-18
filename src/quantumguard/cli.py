@@ -32,6 +32,7 @@ from quantumguard.agents.response_engine import ResponseEngine
 from quantumguard.agents.optimizer import Optimizer
 from quantumguard.utils.viz import plot_threat_graph, save_threat_viz
 from quantumguard.models.federated import start_federated_server
+from quantumguard.utils.storage import save_detection
 
 logger = get_logger(__name__)
 
@@ -133,9 +134,8 @@ def detect(
     result = detector.execute(graph)
 
     # Save to history for learning
-from quantumguard.utils.storage import save_detection  # or inline the function
     save_detection(result)
-    
+
     console = Console()
     table = Table(title="Detection Summary")
     table.add_column("Metric", style="cyan")

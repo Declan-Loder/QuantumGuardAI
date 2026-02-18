@@ -1,0 +1,67 @@
+[
+  {
+    "timestamp": "2026-02-18 10:27:12",
+    "anomaly_score": 0.772317111492157,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "192.168.1.100",
+      "10.0.0.5",
+      "8.8.8.8",
+      "192.168.1.101"
+    ],
+    "node_count": 4
+  },
+  {
+    "timestamp": "2026-02-18 10:31:43",
+    "anomaly_score": 0.7717905640602112,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "192.168.1.100",
+      "10.0.0.5",
+      "8.8.8.8",
+      "192.168.1.101"
+    ],
+    "node_count": 4
+  },
+  {
+    "timestamp": "2026-02-18 11:05:34",
+    "anomaly_score": 0.7729760408401489,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "192.168.1.100",
+      "10.0.0.5",
+      "192.168.1.101",
+      "8.8.8.8"
+    ],
+    "node_count": 4
+  },
+  {
+    "timestamp": "2026-02-18 11:05:42",
+    "anomaly_score": 0.7723078727722168,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "10.0.0.5",
+      "192.168.1.100",
+      "192.168.1.101",
+      "8.8.8.8"
+    ],
+    "node_count": 4
+  },
+  {
+    "timestamp": "2026-02-18 11:05:51",
+    "anomaly_score": 0.7715052962303162,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "10.0.0.5",
+      "192.168.1.100",
+      "192.168.1.101",
+      "8.8.8.8"
+    ],
+    "node_count": 4
+  }
+]

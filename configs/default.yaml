@@ -35,7 +35,9 @@ agents:
     escalation_delay_seconds: 300  # Time before escalating response
 
   optimizer:
-    enabled: false                 # Off by default - enable for self-improvement loops
+    enabled: true                 
+    min_history: 1
+    target_high_conf_ratio: 0.6
     rl_algorithm: ppo              # Or sac, td3, etc. (future)
     training_interval_hours: 24
     simulation_episodes: 100

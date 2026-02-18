@@ -39,7 +39,7 @@ class Optimizer(BaseAgent):
     ) -> None:
         super().__init__(name, config, memory)
 
-        self.enabled: bool = self.config.get("enabled", False)
+        self.enabled: bool = True
         if not self.enabled:
             logger.warning("Optimizer disabled in config (agents.optimizer.enabled: false)")
 

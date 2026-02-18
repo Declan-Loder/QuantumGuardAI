@@ -18,7 +18,7 @@ agents:
     escalation_delay_seconds: 600  # Longer delay before any automated action
 
   optimizer:
-    enabled: false               # Never enable self-optimization automatically in prod
+    enabled: True               # Never enable self-optimization automatically in prod
 
 privacy:
   differential:

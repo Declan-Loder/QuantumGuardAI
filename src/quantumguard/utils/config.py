@@ -143,15 +143,38 @@ class RootConfig(BaseModel):
 # ────────────────────────────────────────────────
 
 @lru_cache()
-def get_config(env: str = os.getenv("QUANTUMGUARD_ENVIRONMENT", "development")) -> RootConfig:
+def get_config() -> RootConfig:
     base_dir = Path(__file__).parent.parent.parent / "configs"
-    default_path = base_dir / "default.yaml"
+    env = os.getenv("QUANTUMGUARD_ENVIRONMENT", "development").lower()
 
     raw_config: Dict[str, Any] = {}
 
+    # 1. Load base default.yaml
+    default_path = base_dir / "default.yaml"
     if default_path.is_file():
         with default_path.open("r", encoding="utf-8") as f:
             raw_config = yaml.safe_load(f) or {}
+
+    # 2. Load environment-specific override (e.g. development.yaml, production.yaml)
+    env_path = base_dir / f"{env}.yaml"
+    if env_path.is_file():
+        with env_path.open("r", encoding="utf-8") as f:
+            env_config = yaml.safe_load(f) or {}
+            # Deep merge: env overrides base
+            for key, value in env_config.items():
+                if key in raw_config and isinstance(value, dict) and isinstance(raw_config[key], dict):
+                    raw_config[key].update(value)
+                else:
+                    raw_config[key] = value
+
+    # 3. Override with environment variables (QUANTUMGUARD_ prefix)
+    for key, value in os.environ.items():
+        if key.startswith("QUANTUMGUARD_"):
+            parts = key.lower().split("_")[1:]  # skip QUANTUMGUARD_
+            current = raw_config
+            for part in parts[:-1]:
+                current = current.setdefault(part, {})
+            current[parts[-1]] = value  # simple set (no deep bool/int parsing yet)
 
     try:
         return RootConfig(**raw_config)
@@ -160,7 +183,6 @@ def get_config(env: str = os.getenv("QUANTUMGUARD_ENVIRONMENT", "development")) 
 
 
 _config_instance: Optional[RootConfig] = None
-
 
 def config() -> RootConfig:
     global _config_instance
