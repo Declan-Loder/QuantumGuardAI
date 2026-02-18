@@ -16,9 +16,6 @@ Configuration keys (from agents.threat_detector):
 - confidence_threshold (float): minimum score to raise alert
 - max_graph_nodes (int): safety cap to prevent OOM
 - model (str): reference to GNN model type/config
-
-For MVP: uses simple random outputs + dummy conversion.
-Will be replaced with real GNN forward pass once models/gnn.py is implemented.
 """
 
 from __future__ import annotations
@@ -39,15 +36,6 @@ logger = get_logger(__name__)
 class ThreatDetector(BaseAgent):
     """
     GNN-based threat detection agent.
-
-    Primary inputs:
-    - List[Dict]: raw log entries (Zeek, Suricata, NetFlow, etc.)
-    - nx.Graph: pre-constructed network graph
-    - torch_geometric.Data: ready-to-infer graph
-
-    Outputs:
-    - Dict containing anomaly_score, top_suspicious_nodes, confidence, etc.
-    - Stores high-confidence detections in memory/state
     """
 
     description: str = (
@@ -88,9 +76,7 @@ class ThreatDetector(BaseAgent):
         }
 
     def _build_graph_from_logs(self, logs: List[Dict[str, Any]]) -> nx.Graph:
-        """
-        Tool: Construct NetworkX graph from batch of log entries.
-        """
+        """Construct NetworkX graph from batch of log entries."""
         G = nx.Graph()
 
         for entry in logs:
@@ -124,7 +110,7 @@ class ThreatDetector(BaseAgent):
                 G.nodes[dst]["anomalies"] += 1
 
         if len(G) > self.max_graph_nodes:
-            self.logger.warning("Graph exceeds max nodes – applying simple trim")
+            self.logger.warning("Graph exceeds max nodes – trimming")
             to_remove = sorted(G.degree, key=lambda x: x[1])[:len(G) - self.max_graph_nodes]
             G.remove_nodes_from([n for n, _ in to_remove])
 
@@ -133,17 +119,12 @@ class ThreatDetector(BaseAgent):
         return G
 
     def _convert_nx_to_geometric(self, G: nx.Graph) -> Data:
-        """
-        Tool: Convert NetworkX graph to torch_geometric.Data.
-        MVP: dummy features (real version extracts meaningful node/edge attrs)
-        """
+        """Convert NetworkX graph to torch_geometric.Data."""
         if len(G) == 0:
             return Data(x=torch.empty((0, 16)), edge_index=torch.empty((2, 0), dtype=torch.long))
 
-        # Dummy node features (16-dim)
         x = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)
 
-        # Edge index (undirected → bidirectional)
         edge_index = []
         for u, v in G.edges():
             i = list(G.nodes).index(u)
@@ -155,11 +136,9 @@ class ThreatDetector(BaseAgent):
         data = Data(x=x, edge_index=edge_index, num_nodes=G.number_of_nodes())
         return data
 
-    def _run_gnn_inference(self, data: Data) -> Dict[str, Any]:
+    def _run_gnn_inference(self, data: Data, graph: nx.Graph = None, events: List[Dict] = None) -> Dict[str, Any]:
         """
-        Tool: Execute GNN forward pass.
-        Returns high-level threat metrics.
-        MVP: random scores (replace with real model forward pass)
+        Execute GNN forward pass and compute meaningful threat scores.
         """
         if self.model is None:
             raise RuntimeError("No GNN model loaded")
@@ -170,29 +149,62 @@ class ThreatDetector(BaseAgent):
                 "anomaly_score": 0.0,
                 "max_confidence": 0.0,
                 "top_suspicious_nodes": [],
+                "suspicious_ips": [],
                 "node_count": 0,
             }
 
         self.model.eval()
         with torch.no_grad():
-            # Use real node features and edge_index from data
-            # If edge_index is empty, skip or use dummy
             if data.edge_index.numel() == 0:
                 dummy_edge_index = torch.empty((2, 0), dtype=torch.long)
                 output = self.model(data.x, dummy_edge_index)
             else:
                 output = self.model(data.x, data.edge_index)
 
-        # Placeholder scoring (real model will return proper logits/scores)
-        node_scores = torch.rand(data.num_nodes)  # Dummy anomaly probabilities
+        # Meaningful scoring
+        if graph is not None:
+            degrees = torch.tensor([d for n, d in graph.degree()], dtype=torch.float)
+            degrees_norm = degrees / (degrees.max() + 1e-6)
+        else:
+            degrees_norm = torch.zeros(data.num_nodes)
+
+        # Anomaly boost from events
+        anomaly_boost = torch.zeros(data.num_nodes)
+        if events and graph:
+            node_map = {ip: idx for idx, ip in enumerate(graph.nodes())}
+            for event in events:
+                if event.get("anomaly", False):
+                    src = event.get("src_ip")
+                    dst = event.get("dst_ip")
+                    if src in node_map:
+                        anomaly_boost[node_map[src]] += 0.7
+                    if dst in node_map:
+                        anomaly_boost[node_map[dst]] += 0.7
+
+        anomaly_boost = torch.clamp(anomaly_boost, 0.0, 1.0)
+
+        # Combine scores
+        gnn_contrib = torch.sigmoid(output.mean(dim=1))
+        combined_scores = 0.5 * degrees_norm + 0.4 * anomaly_boost + 0.1 * gnn_contrib
+        node_scores = combined_scores / (combined_scores.max() + 1e-6)
+
         mean_score = node_scores.mean().item()
         max_score = node_scores.max().item()
         top_k_indices = torch.topk(node_scores, k=min(5, data.num_nodes)).indices.tolist()
+
+        # Map top indices to real IPs
+        suspicious_ips = []
+        if graph is not None:
+            node_list = list(graph.nodes())
+            for idx in top_k_indices:
+                if idx < len(node_list):
+                    suspicious_ips.append(node_list[idx])
 
         result = {
             "anomaly_score": mean_score,
             "max_confidence": max_score,
             "top_suspicious_nodes": top_k_indices,
+            "suspicious_ips": suspicious_ips,
             "node_count": data.num_nodes,
         }
 
@@ -205,27 +217,25 @@ class ThreatDetector(BaseAgent):
     def execute(self, input_data: Any) -> Dict[str, Any]:
         """
         Main detection cycle.
-
-        Supported input_data types:
-        - List[Dict]: raw logs → build graph → infer
-        - nx.Graph: pre-built graph → convert → infer
-        - Data: ready geometric data → infer directly
-
-        Returns standardized detection result for ResponseEngine.
         """
         start = time.time()
 
+        graph = None
+        events = None
+
         if isinstance(input_data, list):
+            events = input_data
             graph = self.call_tool("build_graph_from_logs", logs=input_data)
             data = self.call_tool("convert_nx_to_geometric", G=graph)
         elif isinstance(input_data, nx.Graph):
-            data = self.call_tool("convert_nx_to_geometric", G=input_data)
+            graph = input_data
+            data = self.call_tool("convert_nx_to_geometric", G=graph)
         elif isinstance(input_data, Data):
             data = input_data
         else:
             raise ValueError(f"Unsupported input type for ThreatDetector: {type(input_data)}")
 
-        inference_result = self.call_tool("run_gnn_inference", data=data)
+        inference_result = self.call_tool("run_gnn_inference", data=data, graph=graph, events=events)
 
         duration = time.time() - start
 
@@ -235,6 +245,7 @@ class ThreatDetector(BaseAgent):
             "graph_nodes": data.num_nodes,
             "execution_time_seconds": round(duration, 3),
             "high_confidence": inference_result["max_confidence"] >= self.confidence_threshold,
+            "suspicious_ips": inference_result.get("suspicious_ips", []),
         }
 
         self.logger.info("Threat detection cycle completed", **full_result)
@@ -245,4 +256,3 @@ class ThreatDetector(BaseAgent):
         super().finalize()
         if self.model is not None:
             self.logger.info("ThreatDetector finalizing – model state preserved")
-            

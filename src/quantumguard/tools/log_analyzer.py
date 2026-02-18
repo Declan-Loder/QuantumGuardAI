@@ -217,32 +217,45 @@ class LogAnalyzer:
 
         return events
 
-    def _parse_generic_csv_or_json(self, lines: List[str]) -> List[Dict[str, Any]]:
-        """Fallback parser for generic CSV/JSON logs."""
-        events = []
+def _parse_generic_csv_or_json(self, lines: List[str]) -> List[Dict[str, Any]]:
+    """Fallback parser for generic CSV/JSON logs."""
+    events = []
 
-        # Try JSON first (one object per line)
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+    content = "\n".join(lines).strip()
 
-            try:
-                data = json.loads(line)
-                events.append(self._normalize_event(data))
-            except json.JSONDecodeError:
-                pass  # Try CSV next
+    # Try parsing as single JSON array
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            for item in data:
+                events.append(self._normalize_event(item))
+            if events:
+                logger.info("Parsed JSON array successfully", event_count=len(events))
+                return events
+    except json.JSONDecodeError:
+        pass
 
-        # Try CSV if no JSON events
-        if not events:
-            try:
-                reader = csv.DictReader(StringIO("\n".join(lines)))
-                for row in reader:
-                    events.append(self._normalize_event(row))
-            except Exception as e:
-                logger.debug("CSV parse failed", error=str(e))
+    # Try JSON lines (one object per line)
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            events.append(self._normalize_event(data))
+        except json.JSONDecodeError:
+            pass
 
-        return events
+    # Fallback to CSV
+    if not events:
+        try:
+            reader = csv.DictReader(StringIO(content))
+            for row in reader:
+                events.append(self._normalize_event(row))
+        except Exception as e:
+            logger.debug("CSV parse failed", error=str(e))
+
+    return events
 
     def _normalize_event(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Standardize field names from any log format."""

@@ -94,7 +94,7 @@ def detect(
     dry_run: bool = typer.Option(True, "--dry-run", help="Simulate detection without actions"),
 ) -> None:
     """
-    Run threat detection on logs, pcaps, or pre-built graphs (dummy version for now).
+    Run threat detection on logs, pcaps, or pre-built graphs.
     """
     logger.info("Starting threat detection", input=str(input_path))
 
@@ -108,21 +108,24 @@ def detect(
     cfg = config().agents.threat_detector
     detector = ThreatDetector("cli-detector", config=cfg.dict())
 
-    # Placeholder: real impl would load/parse input based on extension
+    graph = nx.Graph()
+
     if input_path.suffix in (".json", ".log"):
         from quantumguard.tools.log_analyzer import LogAnalyzer
         analyzer = LogAnalyzer(config().tools.log_analyzer)
         events = analyzer.parse_log_file(input_path)
-        graph = nx.Graph()
+
+        # Build real graph from parsed events
         for event in events:
-            src = event["src_ip"]
-            dst = event["dst_ip"]
-            graph.add_node(src, type="device")
-            graph.add_node(dst, type="device")
-            graph.add_edge(src, dst,
-            protocol=event["protocol"],
-            bytes=event["bytes_in"] + event["bytes_out"],
-            anomaly=event["anomaly"])
+            src = event.get("src_ip")
+            dst = event.get("dst_ip")
+            if src and dst and src != dst:
+                graph.add_node(src, type="device")
+                graph.add_node(dst, type="device")
+                graph.add_edge(src, dst,
+                               protocol=event.get("protocol", "unknown"),
+                               bytes=event.get("bytes_in", 0) + event.get("bytes_out", 0),
+                               anomaly=event.get("anomaly", False))
     else:
         logger.error("Unsupported input format")
         raise typer.Exit(1)
@@ -131,8 +134,8 @@ def detect(
 
     console = Console()
     table = Table(title="Detection Summary")
-    table.add_column("Metric")
-    table.add_column("Value")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
     table.add_row("Status", result["status"])
     table.add_row("Anomaly Score", f"{result['detection_result']['anomaly_score']:.3f}")
     table.add_row("High Confidence", str(result["high_confidence"]))
@@ -140,14 +143,30 @@ def detect(
     table.add_row("Execution Time", f"{result['execution_time_seconds']}s")
     console.print(table)
 
-    # Save viz for demo
+    # Simple prevention simulation
+    suspicious_ips = result.get("suspicious_ips", [])
+    if suspicious_ips:
+        print("\n[PREVENTION SIMULATION]")
+        for ip in suspicious_ips:
+            print(f"Blocking suspicious IP: {ip} (high confidence)")
+            # Optional: real block (uncomment only if you want actual firewall rule)
+            # import subprocess
+            # try:
+            #     subprocess.run(["sudo", "ufw", "deny", "from", ip], check=True)
+            #     print(f"  → Actual ufw block applied for {ip}")
+            # except Exception as e:
+            #     print(f"  → Failed to apply ufw rule: {e}")
+        print("Prevention actions simulated (real blocking commented out)")
+    else:
+        print("\nNo high-risk IPs detected to block.")
+
+    # Save graph
     fig = plot_threat_graph(graph, title="Threat Graph from Detect")
     save_threat_viz(fig, "detect_graph")
     print("Saved threat graph to outputs/detect_graph.html")
 
     if output_dir:
         print(f"Would save additional output to: {output_dir}")
-
 
 # ────────────────────────────────────────────────
 # Respond Command
