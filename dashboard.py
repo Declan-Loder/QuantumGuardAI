@@ -1,90 +1,134 @@
 # dashboard.py
 import streamlit as st
-from quantumguard.utils.config import config
-import json
+import subprocess
 from pathlib import Path
-import networkx as nx
-from quantumguard.utils.viz import plot_threat_graph
+import time
+from quantumguard.utils.config import config
 
 # ────────────────────────────────────────────────
-# Page config
+# Page config with octopus 🐙
 # ────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="QuantumGuard AI Dashboard",
-    page_icon="🛡️",
+    page_title="QuantumGuard AI 🐙",
+    page_icon="🐙",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("🛡️ QuantumGuard AI Dashboard")
-st.caption(f"Environment: {config().app.environment} | Log level: {config().app.log_level}")
+st.title("🐙 QuantumGuard AI Dashboard")
+st.caption(f"v0.1.0-dev | Environment: {config().app.environment} | Log level: {config().app.log_level}")
 
 # ────────────────────────────────────────────────
-# Sidebar
+# Sidebar Controls
 # ────────────────────────────────────────────────
 
 with st.sidebar:
     st.header("Controls")
-    run_detect = st.button("Run Dummy Detect", type="primary")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        run_detect = st.button("Run Detect", type="primary", use_container_width=True)
+    with col2:
+        refresh = st.button("Refresh", use_container_width=True)
+
     st.markdown("---")
-    st.info("Dashboard MVP — real data & GNN coming soon")
+    st.info("🐙 MVP Dashboard — real GNN & alerts coming soon")
 
 # ────────────────────────────────────────────────
-# Main content tabs
+# Main Tabs
 # ────────────────────────────────────────────────
 
-tab1, tab2, tab3 = st.tabs(["Overview", "Detection", "Graph"])
+tab1, tab2, tab3 = st.tabs(["🐙 Overview", "Detection", "Graph"])
+
+# ────────────────────────────────────────────────
+# Overview Tab
+# ────────────────────────────────────────────────
 
 with tab1:
     st.subheader("System Status")
-    col1, col2 = st.columns(2)
-    col1.metric("Environment", config().app.environment)
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Environment", config().app.environment, delta_color="normal")
     col2.metric("Log Level", config().app.log_level)
+    col3.metric("Last Detection", time.strftime("%H:%M:%S"), delta="Just now" if run_detect else "Never")
 
     st.markdown("### Quick Stats")
-    st.write("- Agents ready: ThreatDetector, ResponseEngine")
-    st.write("- Last GNN model: GraphSAGE (dummy)")
-    st.write("- Graph saved: outputs/detect_graph.html")
+    st.markdown("- Agents ready: ThreatDetector, ResponseEngine")
+    st.markdown("- Last GNN model: GraphSAGE (dummy)")
+    st.markdown("- Graph saved: outputs/detect_graph.html")
+
+    if st.button("Clear Cache & Restart"):
+        st.cache_data.clear()
+        st.rerun()
+
+# ────────────────────────────────────────────────
+# Detection Tab
+# ────────────────────────────────────────────────
 
 with tab2:
-    st.subheader("Run Detection")
-    if run_detect:
-        with st.spinner("Running dummy detection..."):
-            # Simulate your CLI detect output
-            st.success("Detection complete!")
-            st.write("Anomaly score: **0.87** (dummy)")
-            st.write("Top suspicious nodes:")
-            st.write("- 192.168.1.100")
-            st.write("- 10.0.0.5")
-            st.write("High confidence alert: **Triggered**")
-            st.write("Environment:", config().app.environment)
+    st.subheader("Latest Detection")
+    
+    if run_detect or refresh:
+        with st.spinner("Running detection..."):
+            try:
+                # Run the real CLI command
+                result = subprocess.run(
+                    ["poetry", "run", "quantumguard", "detect", "data/dummy_logs.json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60  # 60 seconds max
+                )
 
-            # Show summary table
-            data = {
-                "Metric": ["Status", "Anomaly Score", "High Confidence", "Nodes Analyzed", "Execution Time"],
-                "Value": ["success", "0.000", "False", "0", "0.001s"]
-            }
-            st.table(data)
+                if result.returncode == 0:
+                    st.success("Detection complete!")
+                    
+                    # Show output in expandable code block
+                    with st.expander("Full Detection Output", expanded=True):
+                        st.code(result.stdout, language="text")
+                    
+                    # Try to parse the summary table from output (simple string search)
+                    if "Detection Summary" in result.stdout:
+                        st.markdown("### Detection Summary")
+                        # Very basic parsing - you can improve later
+                        lines = result.stdout.splitlines()
+                        for line in lines:
+                            if "│" in line and "Metric" not in line and "Value" not in line:
+                                st.write(line.strip())
+                else:
+                    st.error("Detection failed")
+                    st.code(result.stderr, language="text")
+                    
+            except subprocess.TimeoutExpired:
+                st.error("Detection timed out after 60 seconds")
+            except Exception as e:
+                st.error(f"Error running detect: {e}")
+    else:
+        st.info("Click 'Run Detect' to scan logs and generate a graph")
+
+# ────────────────────────────────────────────────
+# Graph Tab
+# ────────────────────────────────────────────────
 
 with tab3:
     st.subheader("Threat Graph")
     graph_file = Path("outputs/detect_graph.html")
 
     if graph_file.exists():
-        st.success("Graph found!")
-        # Option 1: Link to open in new tab
-        st.markdown(f"[Open interactive graph]({graph_file})", unsafe_allow_html=True)
-
-        # Option 2: Embed (may not always work perfectly in Streamlit)
+        st.success(f"Graph found ({graph_file.stat().st_size / 1024:.1f} KB)")
+        
+        # Link to open in new tab
+        st.markdown(f"[🌐 Open interactive graph in new tab]({graph_file})", unsafe_allow_html=True)
+        
+        # Embed the Plotly HTML (usually works great)
         try:
             with open(graph_file, "r", encoding="utf-8") as f:
                 html_content = f.read()
-            st.components.v1.html(html_content, height=600, scrolling=True)
+            st.components.v1.html(html_content, height=700, scrolling=True)
         except Exception as e:
-            st.warning(f"Could not embed graph: {e}")
+            st.warning(f"Could not embed graph: {e} — use the link above")
     else:
-        st.warning("No graph found yet. Run detect command first.")
+        st.warning("No graph yet. Run detection first to generate one.")
 
 st.markdown("---")
-st.caption("QuantumGuard AI v0.1.0-dev | MIT License (open core)")
+st.caption("🐙 QuantumGuard AI — Privacy-preserving, self-optimizing cybersecurity")

@@ -6,22 +6,23 @@ Main command-line interface for running agents, tools, and workflows.
 
 Usage examples:
     quantumguard --help
-    quantumguard detect --target 192.168.1.0/24 --config configs/production.yaml
+    quantumguard detect data/dummy_logs.json
     quantumguard viz --graph outputs/last_threat_graph.gpickle
     quantumguard federate --server --rounds 5
-
-Typer-based, type-safe, with rich help & autocompletion.
+    quantumguard hello
 """
 
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
+import networkx as nx
 
 from quantumguard import __version__
 from quantumguard.utils.config import config
@@ -74,9 +75,8 @@ def main(
     QuantumGuard CLI – run detection, response, optimization, federation, and visualization.
     """
     if config_path:
-        # In real impl: reload config with override
         logger.info(f"Using custom config: {config_path}")
-        # Future: implement dynamic reload
+        # Future: implement dynamic reload if needed
     if verbose:
         import logging
         logging.getLogger().setLevel(logging.DEBUG)
@@ -94,26 +94,40 @@ def detect(
     dry_run: bool = typer.Option(True, "--dry-run", help="Simulate detection without actions"),
 ) -> None:
     """
-    Run threat detection on logs, pcaps, or pre-built graphs.
+    Run threat detection on logs, pcaps, or pre-built graphs (dummy version for now).
     """
     logger.info("Starting threat detection", input=str(input_path))
+
+    print("Dummy detection started...")
+    print("Input file:", input_path)
+    print("Anomaly score: 0.87 (dummy)")
+    print("Top suspicious nodes: 192.168.1.100, 10.0.0.5")
+    print("High confidence alert triggered!")
+    print("Environment:", config().app.environment)
 
     cfg = config().agents.threat_detector
     detector = ThreatDetector("cli-detector", config=cfg.dict())
 
     # Placeholder: real impl would load/parse input based on extension
     if input_path.suffix in (".json", ".log"):
-        # Assume logs
         from quantumguard.tools.log_analyzer import LogAnalyzer
-        analyzer = LogAnalyzer(config().tools.log_analyzer.dict())
+        analyzer = LogAnalyzer(config().tools.log_analyzer)
         events = analyzer.parse_log_file(input_path)
-        graph = nx.Graph()  # Build real graph here
-        # ... (connect to graph builder)
+        graph = nx.Graph()
+        for event in events:
+            src = event["src_ip"]
+            dst = event["dst_ip"]
+            graph.add_node(src, type="device")
+            graph.add_node(dst, type="device")
+            graph.add_edge(src, dst,
+            protocol=event["protocol"],
+            bytes=event["bytes_in"] + event["bytes_out"],
+            anomaly=event["anomaly"])
     else:
         logger.error("Unsupported input format")
         raise typer.Exit(1)
 
-    result = detector.execute(graph)  # or events
+    result = detector.execute(graph)
 
     console = Console()
     table = Table(title="Detection Summary")
@@ -126,11 +140,13 @@ def detect(
     table.add_row("Execution Time", f"{result['execution_time_seconds']}s")
     console.print(table)
 
+    # Save viz for demo
+    fig = plot_threat_graph(graph, title="Threat Graph from Detect")
+    save_threat_viz(fig, "detect_graph")
+    print("Saved threat graph to outputs/detect_graph.html")
+
     if output_dir:
-        # Save results, viz, etc.
-        from quantumguard.utils.viz import plot_threat_graph
-        fig = plot_threat_graph(graph)
-        save_threat_viz(fig, "detection_result")
+        print(f"Would save additional output to: {output_dir}")
 
 
 # ────────────────────────────────────────────────
@@ -155,7 +171,6 @@ def respond(
     engine = ResponseEngine("cli-response", config=cfg.dict())
 
     # Load detection result (placeholder)
-    import json
     with detection_result.open() as f:
         detection = json.load(f)
 
@@ -249,6 +264,19 @@ def federate(
         logger.info("Client mode – start via Flower client launcher (not implemented in CLI yet)")
     else:
         logger.error("Specify --server or --client")
+
+
+# ────────────────────────────────────────────────
+# Hello Command (for testing)
+# ────────────────────────────────────────────────
+
+@app.command()
+def hello():
+    """Print a hello message from QuantumGuard."""
+    print("Hello from QuantumGuard AI!")
+    print("CLI is fully operational 🚀")
+    print(f"Environment: {config().app.environment}")
+    print("Logging and config are working!")
 
 
 if __name__ == "__main__":

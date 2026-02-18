@@ -9,12 +9,13 @@ packages = [{ include = "quantumguard", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-typer = "^0.12.5"
+typer = "0.12.5"
 structlog = "^24.1"
 pyyaml = "^6.0"
 pydantic = "^2.5"
 networkx = "^3.2"
 plotly = "^5.18"
+click = "8.1.7"
 
 [tool.poetry.scripts]
 quantumguard = "quantumguard.cli:app"
@@ -25,5 +26,15 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 ml = [
-    "torch-geometric (>=2.7.0,<3.0.0)"
+    "torch-geometric (>=2.7.0,<3.0.0)",
+    "torch (==2.3.1)",
+    "torchvision (==0.18.1)",
+    "torchaudio (==2.3.1)",
+    "flwr (>=1.26.1,<2.0.0)"
+]
+tools = [
+    "scapy (>=2.7.0,<3.0.0)"
+]
+dev = [
+    "streamlit (>=1.54.0,<2.0.0)"
 ]

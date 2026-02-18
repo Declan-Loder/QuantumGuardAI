@@ -81,12 +81,12 @@ class GNNTthreatModel(nn.Module):
         )
 
         logger.info(
-            "GNNTthreatModel initialized",
-            type=self.type,
-            layers=self.num_layers,
-            hidden=self.hidden_channels,
-            dropout=self.dropout,
-            out_channels=self.out_channels
+        "GNNTthreatModel initialized (model_type=%s, layers=%s, hidden=%s, dropout=%s, out_channels=%s)",
+        self.type,
+        self.num_layers,
+        self.hidden_channels,
+        self.dropout,
+        self.out_channels
         )
 
     def _build_convs(self) -> None:

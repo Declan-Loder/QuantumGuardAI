@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, List, Optional, Tuple, cast
 
 import flwr as fl
 import torch
@@ -37,7 +37,7 @@ from flwr.server.strategy import FedAvg
 from torch.utils.data import DataLoader
 
 from quantumguard.models.gnn import GNNTthreatModel
-from quantumguard.utils.config import Config  # We'll implement this later
+from quantumguard.utils.config import config  # We'll implement this later
 from quantumguard.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -69,7 +69,7 @@ class QuantumGuardClient(fl.client.NumPyClient):
         self.model.to(self.device)
         logger.info(f"Client {cid} initialized", device=self.device.type, epochs=local_epochs)
 
-    def get_parameters(self, config: Dict[str, Scalar]) -> NDArrays:
+    def get_parameters(self, config: dict[str, Scalar]) -> NDArrays:
         """Return local model parameters as NumPy arrays."""
         return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
 
@@ -83,8 +83,8 @@ class QuantumGuardClient(fl.client.NumPyClient):
     def fit(
         self,
         parameters: NDArrays,
-        config: Dict[str, Scalar],
-    ) -> Tuple[NDArrays, int, Dict[str, Scalar]]:
+        config: dict[str, Scalar],
+    ) -> Tuple[NDArrays, int, dict[str, Scalar]]:
         """Local training loop."""
         self.set_parameters(parameters)
 

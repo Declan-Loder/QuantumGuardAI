@@ -31,7 +31,7 @@ import torch
 from torch_geometric.data import Data
 
 from quantumguard.agents.base import BaseAgent
-from quantumguard.models.gnn import GNNTthreatModel  # Forward reference – implement next
+from quantumguard.models.gnn import GNNTthreatModel
 from quantumguard.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,8 +74,6 @@ class ThreatDetector(BaseAgent):
         """Initialize or load the GNN threat model."""
         gnn_config = self.config.get("models", {}).get("gnn", {})
         try:
-            # In production: load from checkpoint path
-            # For now: create new instance (real load added later)
             self.model = GNNTthreatModel(gnn_config)
             self.logger.info("Threat model loaded", model_type=self.model.__class__.__name__)
         except Exception as e:
@@ -92,14 +90,6 @@ class ThreatDetector(BaseAgent):
     def _build_graph_from_logs(self, logs: List[Dict[str, Any]]) -> nx.Graph:
         """
         Tool: Construct NetworkX graph from batch of log entries.
-
-        Expected log fields (at minimum):
-        - src_ip, dst_ip
-        - protocol, bytes, duration (optional)
-        - anomaly / suspicious flags (optional)
-
-        Nodes: IPs/devices
-        Edges: communications with aggregated stats
         """
         G = nx.Graph()
 
@@ -109,13 +99,11 @@ class ThreatDetector(BaseAgent):
             if not src or not dst or src == dst:
                 continue
 
-            # Initialize nodes if missing
             if src not in G:
                 G.add_node(src, type="device", bytes_out=0, bytes_in=0, anomalies=0)
             if dst not in G:
                 G.add_node(dst, type="device", bytes_out=0, bytes_in=0, anomalies=0)
 
-            # Aggregate edge stats
             key = (src, dst)
             if not G.has_edge(*key):
                 G.add_edge(src, dst,
@@ -128,7 +116,6 @@ class ThreatDetector(BaseAgent):
                 data["bytes"] += entry.get("bytes", 0)
                 data["count"] += 1
 
-            # Update node aggregates
             G.nodes[src]["bytes_out"] += entry.get("bytes", 0)
             G.nodes[dst]["bytes_in"] += entry.get("bytes", 0)
 
@@ -136,28 +123,24 @@ class ThreatDetector(BaseAgent):
                 G.nodes[src]["anomalies"] += 1
                 G.nodes[dst]["anomalies"] += 1
 
-        # Enforce size limit
         if len(G) > self.max_graph_nodes:
             self.logger.warning("Graph exceeds max nodes – applying simple trim")
-            # Remove lowest-degree nodes (simple heuristic for MVP)
             to_remove = sorted(G.degree, key=lambda x: x[1])[:len(G) - self.max_graph_nodes]
             G.remove_nodes_from([n for n, _ in to_remove])
 
         self.remember("last_built_graph", G)
         self.logger.debug("Graph constructed", nodes=G.number_of_nodes(), edges=G.number_of_edges())
-
         return G
 
     def _convert_nx_to_geometric(self, G: nx.Graph) -> Data:
         """
         Tool: Convert NetworkX graph to torch_geometric.Data.
-
-        MVP version: dummy features (real version extracts meaningful node/edge attrs)
+        MVP: dummy features (real version extracts meaningful node/edge attrs)
         """
         if len(G) == 0:
             return Data(x=torch.empty((0, 16)), edge_index=torch.empty((2, 0), dtype=torch.long))
 
-        # Dummy node features (16-dim) – real: degree, centrality, port counts, bytes, etc.
+        # Dummy node features (16-dim)
         x = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)
 
         # Edge index (undirected → bidirectional)
@@ -167,7 +150,7 @@ class ThreatDetector(BaseAgent):
             j = list(G.nodes).index(v)
             edge_index.extend([[i, j], [j, i]])
 
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous() if edge_index else torch.empty((2, 0), dtype=torch.long)
 
         data = Data(x=x, edge_index=edge_index, num_nodes=G.number_of_nodes())
         return data
@@ -175,19 +158,32 @@ class ThreatDetector(BaseAgent):
     def _run_gnn_inference(self, data: Data) -> Dict[str, Any]:
         """
         Tool: Execute GNN forward pass.
-
         Returns high-level threat metrics.
         MVP: random scores (replace with real model forward pass)
         """
         if self.model is None:
             raise RuntimeError("No GNN model loaded")
 
+        if data.num_nodes == 0:
+            self.logger.warning("Empty graph - skipping inference")
+            return {
+                "anomaly_score": 0.0,
+                "max_confidence": 0.0,
+                "top_suspicious_nodes": [],
+                "node_count": 0,
+            }
+
         self.model.eval()
         with torch.no_grad():
-            # Real call (stubbed – actual model returns node_logits or scores)
-            output = self.model(data)  # e.g. torch.Tensor of shape [num_nodes]
+            # Use real node features and edge_index from data
+            # If edge_index is empty, skip or use dummy
+            if data.edge_index.numel() == 0:
+                dummy_edge_index = torch.empty((2, 0), dtype=torch.long)
+                output = self.model(data.x, dummy_edge_index)
+            else:
+                output = self.model(data.x, data.edge_index)
 
-        # Placeholder scoring
+        # Placeholder scoring (real model will return proper logits/scores)
         node_scores = torch.rand(data.num_nodes)  # Dummy anomaly probabilities
         mean_score = node_scores.mean().item()
         max_score = node_scores.max().item()
@@ -248,5 +244,5 @@ class ThreatDetector(BaseAgent):
     def finalize(self) -> None:
         super().finalize()
         if self.model is not None:
-            # Future: save model state if needed
             self.logger.info("ThreatDetector finalizing – model state preserved")
+            

@@ -41,9 +41,9 @@ class ThreatGraphVisualizer:
     """
 
     def __init__(self) -> None:
-        self.layout_type: str = config().utils.viz.get("default_layout", "spring")
-        self.color_scale: str = config().utils.viz.get("node_color_scale", "Viridis")
-        self.output_format: str = config().utils.viz.get("output_format", "html")
+        self.layout_type: str = config().utils.viz.default_layout
+        self.color_scale: str = config().utils.viz.node_color_scale
+        self.output_format: str = config().utils.viz.output_format
 
     def plot_threat_graph(
         self,
