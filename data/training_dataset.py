@@ -10,39 +10,42 @@ class SyntheticThreatDataset(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return ['benign_graphs.pt', 'attack_graphs.pt']
+        return []  # No raw files needed
 
     @property
     def processed_file_names(self):
         return 'threat_data.pt'
 
     def process(self):
-        # Create 50 benign + 50 attack graphs
         data_list = []
 
-        # Benign: random connected graphs, low anomaly
+        # Benign graphs: random connected, low anomaly
         for _ in range(50):
-            G = nx.erdos_renyi_graph(n=20, p=0.15)  # normal-ish density
-            for u, v in G.edges():
-                G[u][v]['weight'] = 1.0
+            G = nx.erdos_renyi_graph(n=20, p=0.15)
+            # Add dummy node features (important!)
+            node_features = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)  # 16-dim random
             data = from_networkx(G)
-            data.y = torch.tensor([0])  # label: benign
+            data.x = node_features  # Attach features
+            data.y = torch.tensor([0], dtype=torch.long)  # benign
             data_list.append(data)
 
-        # Attack: star-like scanning, high degree node
+        # Attack graphs: star-like scanning, high degree center
         for _ in range(50):
             G = nx.Graph()
-            center = '192.168.1.100'
+            center = 0  # use integer nodes for simplicity
             G.add_node(center)
             for i in range(1, 15):
-                ip = f'10.0.0.{i}'
-                G.add_node(ip)
-                G.add_edge(center, ip, weight=10.0)  # high traffic
+                G.add_node(i)
+                G.add_edge(center, i)
+            # Dummy features
+            node_features = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)
+            # Boost center node feature to simulate anomaly
+            node_features[center] += 5.0
             data = from_networkx(G)
-            data.y = torch.tensor([1])  # label: attack
+            data.x = node_features
+            data.y = torch.tensor([1], dtype=torch.long)  # attack
             data_list.append(data)
 
-        # Save processed
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
