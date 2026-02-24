@@ -22,35 +22,32 @@ class SyntheticThreatDataset(InMemoryDataset):
         # Benign graphs: random connected, low anomaly
         for _ in range(50):
             G = nx.erdos_renyi_graph(n=20, p=0.15)
-            # Add dummy node features (important!)
-            node_features = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)  # 16-dim random
+            # IMPORTANT: Add node features (random 16-dim, matching model input)
+            num_nodes = G.number_of_nodes()
+            x = torch.rand((num_nodes, 16), dtype=torch.float)  # 16-dim random features
             data = from_networkx(G)
-            data.x = node_features  # Attach features
-            data.y = torch.tensor([0], dtype=torch.long)  # benign
+            data.x = x  # Attach them!
+            data.y = torch.tensor([0], dtype=torch.long)  # label: benign
             data_list.append(data)
 
         # Attack graphs: star-like scanning, high degree center
         for _ in range(50):
             G = nx.Graph()
-            center = 0  # use integer nodes for simplicity
+            center = 0
             G.add_node(center)
             for i in range(1, 15):
                 G.add_node(i)
                 G.add_edge(center, i)
-            # Dummy features
-            node_features = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)
-            # Boost center node feature to simulate anomaly
-            node_features[center] += 5.0
+            # Node features
+            num_nodes = G.number_of_nodes()
+            x = torch.rand((num_nodes, 16), dtype=torch.float)
+            # Boost center node to simulate anomaly (higher values)
+            x[center] += 5.0
             data = from_networkx(G)
-            data.x = node_features
+            data.x = x
             data.y = torch.tensor([1], dtype=torch.long)  # attack
             data_list.append(data)
 
+        # Save processed
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
-
-if __name__ == '__main__':
-    dataset = SyntheticThreatDataset()
-    print(f"Dataset ready: {len(dataset)} graphs")
-    print(f"Benign: {sum(1 for d in dataset if d.y.item() == 0)}")
-    print(f"Attack: {sum(1 for d in dataset if d.y.item() == 1)}")
