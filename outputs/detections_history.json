@@ -63,5 +63,18 @@
       "8.8.8.8"
     ],
     "node_count": 4
+  },
+  {
+    "timestamp": "2026-02-21 17:25:47",
+    "anomaly_score": 0.7742482423782349,
+    "max_confidence": 0.999998152256012,
+    "high_confidence": true,
+    "suspicious_ips": [
+      "10.0.0.5",
+      "192.168.1.100",
+      "192.168.1.101",
+      "8.8.8.8"
+    ],
+    "node_count": 4
   }
 ]
