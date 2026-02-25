@@ -17,7 +17,7 @@ import yaml
 from pydantic import BaseModel, Field, ValidationError
 
 # ────────────────────────────────────────────────
-# All Pydantic models (must come before RootConfig)
+# Pydantic Models
 # ────────────────────────────────────────────────
 
 class AppConfig(BaseModel):
@@ -47,9 +47,9 @@ class AgentResponseEngineConfig(BaseModel):
 
 
 class AgentOptimizerConfig(BaseModel):
-    enabled: bool = False
-    rl_algorithm: str = "evolution"
-    simulation_episodes: int = 50
+    enabled: bool = True  # default to True now
+    rl_algorithm: str = "ppo"
+    simulation_episodes: int = 100
     training_interval_hours: float = 24.0
 
 
@@ -114,6 +114,7 @@ class ToolsConfig(BaseModel):
     network_scan: ToolsNetworkScanConfig = ToolsNetworkScanConfig()
     log_analyzer: Dict[str, Any] = Field(default_factory=dict)
 
+
 class VizConfig(BaseModel):
     default_layout: str = "spring"
     node_color_scale: str = "Viridis"
@@ -125,7 +126,7 @@ class UtilsConfig(BaseModel):
 
 
 # ────────────────────────────────────────────────
-# Root (must come AFTER all other models)
+# RootConfig
 # ────────────────────────────────────────────────
 
 class RootConfig(BaseModel):
@@ -139,6 +140,19 @@ class RootConfig(BaseModel):
 
 
 # ────────────────────────────────────────────────
+# Utility: Deep Merge Dictionaries
+# ────────────────────────────────────────────────
+
+def deep_merge(base: dict, override: dict) -> dict:
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            base[key] = deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+# ────────────────────────────────────────────────
 # Loader
 # ────────────────────────────────────────────────
 
@@ -147,34 +161,28 @@ def get_config() -> RootConfig:
     base_dir = Path(__file__).parent.parent.parent / "configs"
     env = os.getenv("QUANTUMGUARD_ENVIRONMENT", "development").lower()
 
-    raw_config: Dict[str, Any] = {}
-
-    # 1. Load base default.yaml
+    # 1. Load default.yaml
     default_path = base_dir / "default.yaml"
+    raw_config: Dict[str, Any] = {}
     if default_path.is_file():
         with default_path.open("r", encoding="utf-8") as f:
             raw_config = yaml.safe_load(f) or {}
 
-    # 2. Load environment-specific override (e.g. development.yaml, production.yaml)
+    # 2. Load environment-specific YAML
     env_path = base_dir / f"{env}.yaml"
     if env_path.is_file():
         with env_path.open("r", encoding="utf-8") as f:
             env_config = yaml.safe_load(f) or {}
-            # Deep merge: env overrides base
-            for key, value in env_config.items():
-                if key in raw_config and isinstance(value, dict) and isinstance(raw_config[key], dict):
-                    raw_config[key].update(value)
-                else:
-                    raw_config[key] = value
+            raw_config = deep_merge(raw_config, env_config)
 
-    # 3. Override with environment variables (QUANTUMGUARD_ prefix)
+    # 3. Environment variables (optional, keep simple)
     for key, value in os.environ.items():
         if key.startswith("QUANTUMGUARD_"):
-            parts = key.lower().split("_")[1:]  # skip QUANTUMGUARD_
+            parts = key.lower().split("_")[1:]
             current = raw_config
             for part in parts[:-1]:
                 current = current.setdefault(part, {})
-            current[parts[-1]] = value  # simple set (no deep bool/int parsing yet)
+            current[parts[-1]] = value
 
     try:
         return RootConfig(**raw_config)

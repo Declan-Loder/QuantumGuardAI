@@ -21,6 +21,7 @@ Configuration keys (from agents.threat_detector):
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import networkx as nx
@@ -59,13 +60,23 @@ class ThreatDetector(BaseAgent):
         self._load_model()
 
     def _load_model(self) -> None:
-        """Initialize or load the GNN threat model."""
+        """Initialize or load the GNN threat model – prefers trained weights."""
         gnn_config = self.config.get("models", {}).get("gnn", {})
         try:
             self.model = GNNTthreatModel(gnn_config)
-            self.logger.info("Threat model loaded", model_type=self.model.__class__.__name__)
+            self.logger.info("Threat model initialized", model_type=self.model.__class__.__name__)
+
+            # Load trained weights if they exist
+            trained_path = Path("models/trained_gnn.pt")
+            if trained_path.exists():
+                state_dict = torch.load(trained_path, map_location=torch.device('cpu'))
+                self.model.load_state_dict(state_dict)
+                self.logger.info("Loaded trained GNN weights", path=str(trained_path))
+            else:
+                self.logger.warning("No trained weights found – using random initialization")
+
         except Exception as e:
-            self.logger.error("Failed to initialize GNN model", error=str(e))
+            self.logger.error("Failed to load GNN model", error=str(e))
             raise RuntimeError("GNN model failed to load") from e
 
     def _define_tools(self) -> Dict[str, Any]:
@@ -123,6 +134,7 @@ class ThreatDetector(BaseAgent):
         if len(G) == 0:
             return Data(x=torch.empty((0, 16)), edge_index=torch.empty((2, 0), dtype=torch.long))
 
+        # Use random features for now (in real use, extract meaningful features)
         x = torch.rand((G.number_of_nodes(), 16), dtype=torch.float)
 
         edge_index = []

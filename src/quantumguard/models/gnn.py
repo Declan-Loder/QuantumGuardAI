@@ -40,7 +40,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch_geometric.nn import GraphSAGE, GATConv, GINConv
 from torch_geometric.nn import global_mean_pool
-
+from torch_geometric.nn import SAGEConv, global_mean_pool
+from torch_geometric.nn import SAGEConv, global_mean_pool
 logger = logging.getLogger(__name__)
 
 class GNNTthreatModel(nn.Module):
@@ -176,3 +177,40 @@ class GNNTthreatModel(nn.Module):
         """Save current weights."""
         torch.save(self.state_dict(), path)
         logger.info(f"Saved checkpoint to {path}")
+
+class GNNTthreatModel(torch.nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        hidden_channels = config.get('hidden_channels', 128)
+        num_layers = config.get('num_layers', 3)
+        dropout = config.get('dropout', 0.2)
+        out_channels = config.get('out_channels', 2)
+
+        # Input layer
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(SAGEConv(16, hidden_channels))  # input dim 16 from dummy features
+
+        # Hidden layers
+        for _ in range(num_layers - 1):
+            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
+
+        # Dropout
+        self.dropout = torch.nn.Dropout(dropout)
+
+        # Final classifier for graph-level output
+        self.classifier = torch.nn.Linear(hidden_channels, out_channels)
+
+    def forward(self, x, edge_index, batch=None):
+        h = x
+        for conv in self.convs:
+            h = F.relu(conv(h, edge_index))
+            h = self.dropout(h)
+
+        # Global pooling for graph-level prediction
+        if batch is not None:
+            h = global_mean_pool(h, batch)  # [num_graphs, hidden_channels]
+        else:
+            h = h.mean(dim=0, keepdim=True)  # [1, hidden_channels] for single graph
+
+        out = self.classifier(h)
+        return out
