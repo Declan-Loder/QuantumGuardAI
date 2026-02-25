@@ -116,6 +116,23 @@ class Optimizer(BaseAgent):
         return {"reward": random.uniform(-10, 20), "note": "mock episode"}
 
     def finalize(self) -> None:
-        super().finalize()
-        logger.info("Optimizer finalizing", current_threshold=self.confidence_threshold)
-        # Future: save updated threshold to persistent config file
+    super().finalize()
+    logger.info("Optimizer finalizing – current threshold preserved", current_threshold=self.confidence_threshold)
+
+    # Save updated threshold to a YAML override file
+    override_path = Path(__file__).parent.parent.parent / "configs" / "optimizer_override.yaml"
+    data_to_save = {
+        "agents": {
+            "optimizer": {
+                "confidence_threshold": self.confidence_threshold,
+                "enabled": self.enabled
+            }
+        }
+    }
+
+    try:
+        with override_path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data_to_save, f)
+        logger.info(f"Optimizer thresholds saved to {override_path}")
+    except Exception as e:
+        logger.error("Failed to save optimizer override", error=str(e))
