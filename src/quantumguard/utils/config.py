@@ -175,7 +175,17 @@ def get_config() -> RootConfig:
             for part in parts[:-1]:
                 current = current.setdefault(part, {})
             current[parts[-1]] = value  # simple set (no deep bool/int parsing yet)
-
+            
+     #4. Override_path = base_dir / "optimizer_override.yaml"
+        if override_path.is_file():
+            with override_path.open("r", encoding="utf-8") as f:
+            override_config = yaml.safe_load(f) or {}
+    for key, value in override_config.items():
+        if key in raw_config and isinstance(value, dict) and isinstance(raw_config[key], dict):
+            raw_config[key].update(value)
+            else:
+                raw_config[key] = value
+                
     try:
         return RootConfig(**raw_config)
     except ValidationError as e:
