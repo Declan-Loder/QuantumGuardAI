@@ -178,11 +178,11 @@ def get_config() -> RootConfig:
     # 3. Environment variables (optional, keep simple)
     for key, value in os.environ.items():
         if key.startswith("QUANTUMGUARD_"):
-            parts = key.lower().split("_")[1:]
+            parts = key.lower().split("_")[1:]git status
             current = raw_config
             for part in parts[:-1]:
                 current = current.setdefault(part, {})
-            current[parts[-1]] = value
+            current[parts[-1]] = value  # simple set (no deep bool/int parsing yet)
 
     try:
         return RootConfig(**raw_config)
